@@ -207,14 +207,6 @@ class ResultWriter:
         raise NotImplementedError
 
 
-class WriteTXT(ResultWriter):
-    extension: str = "txt"
-
-    def write_result(self, result: dict, file: TextIO, options: dict):
-        for segment in result["segments"]:
-            print(segment["text"].strip(), file=file, flush=True)
-
-
 class SubtitlesWriter(ResultWriter):
     always_include_hours: bool
     decimal_marker: str
@@ -321,6 +313,15 @@ class SubtitlesWriter(ResultWriter):
             always_include_hours=self.always_include_hours,
             decimal_marker=self.decimal_marker,
         )
+
+class WriteTXT(SubtitlesWriter):
+    extension: str = "txt"
+    always_include_hours: bool = False
+    decimal_marker: str = "."
+
+    def write_result(self, result: dict, file: TextIO, options: dict):
+        for _, _, text in self.iterate_result(result, options):
+            print(text, file=file, flush=True)        
 
 
 class WriteVTT(SubtitlesWriter):
