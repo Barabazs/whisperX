@@ -213,10 +213,13 @@ class WriteTXT(ResultWriter):
     extension: str = "txt"
 
     def write_result(self, result: dict, file: TextIO, options: dict):
-        print(options)
         for segment in result["segments"]:
-            print(segment, flush=True)
-            print(segment["text"].strip(), file=file, flush=True)
+            speaker = segment.get("speaker")
+            text = segment["text"].strip()
+            if speaker is not None:
+                print(f"[{speaker}]: {text}", file=file, flush=True)
+            else:
+                print(text, file=file, flush=True)
 
 
 class SubtitlesWriter(ResultWriter):
