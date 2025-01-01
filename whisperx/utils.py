@@ -213,6 +213,7 @@ class WriteTXT(ResultWriter):
     extension: str = "txt"
 
     def write_result(self, result: dict, file: TextIO, options: dict):
+        print(options)
         for segment in result["segments"]:
             print(segment, flush=True)
             print(segment["text"].strip(), file=file, flush=True)
