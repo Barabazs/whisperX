@@ -178,17 +178,10 @@ def align(
             elif char_ in model_dictionary.keys():
                 clean_char.append(char_)
                 clean_cdx.append(cdx)
-            else:
-                # add placeholder
-                clean_char.append('*')
-                clean_cdx.append(cdx)
 
         clean_wdx = []
         for wdx, wrd in enumerate(per_word):
             if any([c in model_dictionary.keys() for c in wrd.lower()]):
-                clean_wdx.append(wdx)
-            else:
-                # index for placeholder
                 clean_wdx.append(wdx)
 
 
@@ -244,7 +237,7 @@ def align(
             continue
 
         text_clean = "".join(segment_data[sdx]["clean_char"])
-        tokens = [model_dictionary.get(c, -1) for c in text_clean]
+        tokens = [model_dictionary[c] for c in text_clean]
 
         f1 = int(t1 * SAMPLE_RATE)
         f2 = int(t2 * SAMPLE_RATE)
@@ -415,43 +408,10 @@ def get_trellis(emission, tokens, blank_id=0):
             # Score for staying at the same token
             trellis[t, 1:] + emission[t, blank_id],
             # Score for changing to the next token
-            # trellis[t, :-1] + emission[t, tokens[1:]],
-            trellis[t, :-1] + get_wildcard_emission(emission[t], tokens[1:], blank_id),
+            trellis[t, :-1] + emission[t, tokens[1:]],
         )
     return trellis
 
-
-def get_wildcard_emission(frame_emission, tokens, blank_id):
-    """Processing token emission scores containing wildcards (vectorized version)
-
-    Args:
-        frame_emission: Emission probability vector for the current frame
-        tokens: List of token indices
-        blank_id: ID of the blank token
-
-    Returns:
-        tensor: Maximum probability score for each token position
-    """
-    assert 0 <= blank_id < len(frame_emission)
-
-    # Convert tokens to a tensor if they are not already
-    tokens = torch.tensor(tokens) if not isinstance(tokens, torch.Tensor) else tokens
-
-    # Create a mask to identify wildcard positions
-    wildcard_mask = (tokens == -1)
-
-    # Get scores for non-wildcard positions
-    regular_scores = frame_emission[tokens.clamp(min=0).long()]  # clamp to avoid -1 index
-
-    # Create a mask and compute the maximum value without modifying frame_emission
-    max_valid_score = frame_emission.clone()   # Create a copy
-    max_valid_score[blank_id] = float('-inf')  # Modify the copy to exclude the blank token
-    max_valid_score = max_valid_score.max()
-
-    # Use where operation to combine results
-    result = torch.where(wildcard_mask, max_valid_score, regular_scores)
-
-    return result
 
 
 @dataclass
@@ -472,8 +432,7 @@ def backtrack(trellis, emission, tokens, blank_id=0):
         # 1. Figure out if the current position was stay or change
         # Frame-wise score of stay vs change
         p_stay = emission[t - 1, blank_id]
-        # p_change = emission[t - 1, tokens[j]]
-        p_change = get_wildcard_emission(emission[t - 1], [tokens[j]], blank_id)[0]
+        p_change = emission[t - 1, tokens[j]]
 
         # Context-aware score for stay vs change
         stayed = trellis[t - 1, j] + p_stay
@@ -549,7 +508,7 @@ def backtrack_beam(trellis, emission, tokens, blank_id=0, beam_width=5):
                 continue
 
             p_stay = emission[t - 1, blank_id]
-            p_change = get_wildcard_emission(emission[t - 1], [tokens[j]], blank_id)[0]
+            p_change = emission[t - 1, tokens[j]]
 
             stay_score = trellis[t - 1, j]
             change_score = trellis[t - 1, j - 1] if j > 0 else float('-inf')
