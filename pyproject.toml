@@ -27,6 +27,14 @@ dependencies = [
 [project.scripts]
 whisperx = "whisperx.__main__:cli"
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires model downloads and tests/fixtures/sample.wav",
+]
+
 [build-system]
 requires = ["setuptools"]
 
