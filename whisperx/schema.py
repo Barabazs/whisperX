@@ -1,4 +1,6 @@
-from typing import TypedDict, Optional, List, Tuple
+from typing import TypedDict, Optional, List, Tuple, Callable
+
+ProgressCallback = Optional[Callable[[float, str], None]]
 
 try:
     from typing import NotRequired

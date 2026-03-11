@@ -62,6 +62,7 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
     max_speakers: int = args.pop("max_speakers")
     diarize_model_name: str = args.pop("diarize_model")
     print_progress: bool = args.pop("print_progress")
+    progress_callback = args.pop("progress_callback", None)
     return_speaker_embeddings: bool = args.pop("speaker_embeddings")
 
     if return_speaker_embeddings and not diarize:
@@ -121,6 +122,38 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
         warnings.warn("--max_line_count has no effect without --max_line_width")
     writer_args = {arg: args.pop(arg) for arg in word_options}
 
+    # Build stage-aware progress callback wrappers
+    stage_callback = None
+    if progress_callback is not None:
+        # Suppress print_progress when progress_callback is set
+        print_progress = False
+
+        # Compute stage weights based on active stages
+        weights = {"transcribe": 45}
+        if not no_align:
+            weights["align"] = 30
+        if diarize:
+            weights["diarize"] = 25
+        total_weight = sum(weights.values())
+
+        # Compute global offset for each stage
+        stage_offsets = {}
+        offset = 0.0
+        for stage in ("transcribe", "align", "diarize"):
+            if stage in weights:
+                stage_offsets[stage] = offset
+                offset += weights[stage]
+
+        def make_stage_callback(stage_name):
+            stage_offset = stage_offsets[stage_name]
+            stage_weight = weights[stage_name]
+            def _cb(local_pct, _stage):
+                global_pct = (stage_offset + local_pct / 100.0 * stage_weight) / total_weight * 100.0
+                progress_callback(global_pct, stage_name)
+            return _cb
+
+        stage_callback = make_stage_callback
+
     # Part 1: VAD & ASR Loop
     results = []
     # model = load_model(model_name, device=device, download_root=model_dir)
@@ -154,6 +187,7 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
             chunk_size=chunk_size,
             print_progress=print_progress,
             verbose=verbose,
+            progress_callback=stage_callback("transcribe") if stage_callback else None,
         )
         results.append((result, audio_path))
 
@@ -196,6 +230,7 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
                     interpolate_method=interpolate_method,
                     return_char_alignments=return_char_alignments,
                     print_progress=print_progress,
+                    progress_callback=stage_callback("align") if stage_callback else None,
                 )
 
             results.append((result, audio_path))
@@ -218,10 +253,11 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
         diarize_model = DiarizationPipeline(model_name=diarize_model_name, token=hf_token, device=device, cache_dir=model_dir)
         for result, input_audio_path in tmp_results:
             diarize_result = diarize_model(
-                input_audio_path, 
-                min_speakers=min_speakers, 
-                max_speakers=max_speakers, 
-                return_embeddings=return_speaker_embeddings
+                input_audio_path,
+                min_speakers=min_speakers,
+                max_speakers=max_speakers,
+                return_embeddings=return_speaker_embeddings,
+                progress_callback=stage_callback("diarize") if stage_callback else None,
             )
 
             if return_speaker_embeddings:
@@ -232,6 +268,9 @@ def transcribe_task(args: dict, parser: argparse.ArgumentParser):
 
             result = assign_word_speakers(diarize_segments, result, speaker_embeddings)
             results.append((result, input_audio_path))
+    if progress_callback is not None:
+        progress_callback(100.0, "complete")
+
     # >> Write
     for result, audio_path in results:
         result["language"] = align_language

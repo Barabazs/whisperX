@@ -5,7 +5,7 @@ from typing import Optional, Union, List, Tuple
 import torch
 
 from whisperx.audio import load_audio, SAMPLE_RATE
-from whisperx.schema import TranscriptionResult, AlignedTranscriptionResult
+from whisperx.schema import TranscriptionResult, AlignedTranscriptionResult, ProgressCallback
 from whisperx.log_utils import get_logger
 
 logger = get_logger(__name__)
@@ -109,6 +109,7 @@ class DiarizationPipeline:
         min_speakers: Optional[int] = None,
         max_speakers: Optional[int] = None,
         return_embeddings: bool = False,
+        progress_callback: ProgressCallback = None,
     ) -> Union[tuple[pd.DataFrame, Optional[dict[str, list[float]]]], pd.DataFrame]:
         """
         Perform speaker diarization on audio.
@@ -133,12 +134,26 @@ class DiarizationPipeline:
             'sample_rate': SAMPLE_RATE
         }
 
-        output = self.model(
-            audio_data,
+        # Build a pyannote hook to relay progress if callback is provided
+        hook = None
+        if progress_callback is not None:
+            progress_callback(0.0, "diarize")
+            def hook(step_name, step_artifact, file=None, total=None, completed=None):
+                if completed is not None and total is not None and total > 0:
+                    progress_callback((completed / total) * 100, "diarize")
+
+        model_kwargs = dict(
             num_speakers=num_speakers,
             min_speakers=min_speakers,
             max_speakers=max_speakers,
         )
+        if hook is not None:
+            model_kwargs["hook"] = hook
+
+        output = self.model(audio_data, **model_kwargs)
+
+        if progress_callback is not None:
+            progress_callback(100.0, "diarize")
 
         diarization = output.speaker_diarization
         embeddings = output.speaker_embeddings if return_embeddings else None

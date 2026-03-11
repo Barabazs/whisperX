@@ -19,6 +19,7 @@ from whisperx.schema import (
     SingleAlignedSegment,
     SingleWordSegment,
     SegmentData,
+    ProgressCallback,
 )
 import nltk
 from nltk.data import load as nltk_load
@@ -122,6 +123,7 @@ def align(
     return_char_alignments: bool = False,
     print_progress: bool = False,
     combined_progress: bool = False,
+    progress_callback: ProgressCallback = None,
 ) -> AlignedTranscriptionResult:
     """
     Align phoneme recognition predictions to known transcription.
@@ -199,6 +201,9 @@ def align(
         }
 
     aligned_segments: List[SingleAlignedSegment] = []
+
+    if total_segments == 0 and progress_callback is not None:
+        progress_callback(100.0, "align")
 
     # 2. Get prediction matrix from alignment model & align
     for sdx, segment in enumerate(transcript):
@@ -362,6 +367,9 @@ def align(
                 curr_chars = curr_chars.to_dict("records")
                 curr_chars = [{key: val for key, val in char.items() if val != -1} for char in curr_chars]
                 aligned_subsegments[-1]["chars"] = curr_chars
+
+        if progress_callback is not None:
+            progress_callback(((sdx + 1) / total_segments) * 100, "align")
 
         aligned_subsegments = pd.DataFrame(aligned_subsegments)
         aligned_subsegments["start"] = interpolate_nans(aligned_subsegments["start"], method=interpolate_method)
