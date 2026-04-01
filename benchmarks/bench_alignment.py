@@ -18,9 +18,6 @@ Local usage:
 # fmt: off
 REPO   = "https://github.com/Barabazs/whisperX.git"
 BRANCHES = ["main", "exp/torch_align"]
-AUDIO_URL = (  # ~33s LibriSpeech sample (public domain)
-    "https://www.openslr.org/resources/12/test-other.tar.gz"
-)
 RUNS   = 20     # alignment iterations per branch
 DEVICE = None   # auto-detect; override with "cpu" or "cuda"
 AUDIO  = None   # set to a local path to skip the download below
@@ -36,26 +33,12 @@ if shutil.which("ffmpeg") is None:
 # %% Download sample audio if needed
 if AUDIO is None:
     if not os.path.exists("/tmp/bench_audio.wav"):
-        print("Downloading LibriSpeech test sample ...")
-        # Grab a single utterance via torchaudio (avoids 300 MB tarball)
-        _bootstrap = f"""\
-import sys, warnings; warnings.filterwarnings("ignore")
-subprocess = __import__("subprocess")
-# Ensure torchaudio is importable (installed with any whisperx version)
-subprocess.check_call([sys.executable, "-m", "pip", "install", "-q",
-    "whisperx @ git+{REPO}@main"], stdout=subprocess.DEVNULL)
-import torchaudio, torch
-# Use the bundled tutorial asset — small WAV, English speech
-path = torchaudio.utils.download_asset(
-    "tutorial-assets/Lab41-SRI-VOiCES-src-sp0307-ch127171-sg0042.wav",
-    progress=False,
-)
-# Resave to a known location
-wav, sr = torchaudio.load(path)
-torchaudio.save("/tmp/bench_audio.wav", wav, sr)
-print(f"Saved {{wav.shape[1]/sr:.1f}}s audio to /tmp/bench_audio.wav")
-"""
-        subprocess.check_call([sys.executable, "-c", _bootstrap])
+        print("Downloading sample audio ...")
+        import urllib.request, io
+        # torchaudio tutorial asset — short English speech, ~3s
+        _URL = "https://pytorch.org/audio/main/_static/Lab41-SRI-VOiCES-src-sp0307-ch127171-sg0042.wav"
+        urllib.request.urlretrieve(_URL, "/tmp/bench_audio.wav")
+        print("Saved to /tmp/bench_audio.wav")
     AUDIO = "/tmp/bench_audio.wav"
 
 print(f"Audio: {AUDIO}")
