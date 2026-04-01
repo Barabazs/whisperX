@@ -34,10 +34,21 @@ if shutil.which("ffmpeg") is None:
 if AUDIO is None:
     if not os.path.exists("/tmp/bench_audio.wav"):
         print("Downloading sample audio ...")
-        import urllib.request, io
-        # torchaudio tutorial asset — short English speech, ~3s
-        _URL = "https://pytorch.org/audio/main/_static/Lab41-SRI-VOiCES-src-sp0307-ch127171-sg0042.wav"
-        urllib.request.urlretrieve(_URL, "/tmp/bench_audio.wav")
+        try:
+            # torchaudio is preinstalled on Colab
+            import torchaudio
+            path = torchaudio.utils.download_asset(
+                "tutorial-assets/Lab41-SRI-VOiCES-src-sp0307-ch127171-sg0042.wav",
+            )
+            import shutil
+            shutil.copy(path, "/tmp/bench_audio.wav")
+        except Exception:
+            # Fallback: 8kHz sample (ffmpeg in whisperx resamples to 16kHz)
+            import urllib.request
+            urllib.request.urlretrieve(
+                "https://www.voiptroubleshooter.com/open_speech/american/OSR_us_000_0010_8k.wav",
+                "/tmp/bench_audio.wav",
+            )
         print("Saved to /tmp/bench_audio.wav")
     AUDIO = "/tmp/bench_audio.wav"
 
