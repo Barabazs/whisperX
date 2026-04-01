@@ -127,7 +127,8 @@ for branch in BRANCHES:
         stdout=subprocess.DEVNULL,
     )
     out_path = f"/tmp/bench_{branch.replace('/', '_')}.json"
-    env = {**os.environ, "_BENCH_BRANCH": branch}
+    env = {k: v for k, v in os.environ.items() if v is not None}
+    env["_BENCH_BRANCH"] = branch
     cmd = [sys.executable, str(runner_path), AUDIO, str(RUNS), out_path]
     if device_flag:
         cmd.append(device_flag)
